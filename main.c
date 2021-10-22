@@ -3,73 +3,61 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include "buffer.h"
 
-#define N 100
 #define MAX 1000
 
 sem_t empty;
 sem_t full;
 pthread_mutex_t mutex;
 
-int buffer[N];
-int size = 0;
-
 int produce() {
   sleep(1);
   return rand() % 10;
 }
 
-void consume(int elem) {
+void consume(int value) {
   sleep(1);
-  printf("%d ", elem);
+  printf("%d ", value);
   fflush(stdout);
 }
 
-void insert_elem(int elem) {
-  buffer[size++] = elem;
-}
-
-int remove_elem() {
-  int elem = buffer[0];
-  size--;
-  for(int i = 0; i < size; i++) {
-    buffer[i] = buffer[i + 1];
-  }
-  return elem;
-}
-
-void *producer() {
+void *producer(void * arg) {
+  buffer_t *buffer = (buffer_t *) arg;
   for (int i = 0; i < MAX; i++) {
-    int elem = produce();
+    int value = produce();
     sem_wait(&empty);
     pthread_mutex_lock(&mutex);
-    insert_elem(elem);
+    buffer_insert(buffer, value);
     pthread_mutex_unlock(&mutex);
     sem_post(&full);
   }
   pthread_exit(NULL);
 }
 
-void *consumer() {
+void *consumer(void * arg) {
+  buffer_t *buffer = (buffer_t *) arg;
   for (int i = 0; i < MAX; i++) {
     sem_wait(&full);
     pthread_mutex_lock(&mutex);
-    int elem = remove_elem();
+    int value = buffer_remove(buffer);
     pthread_mutex_unlock(&mutex);
     sem_post(&empty);
-    consume(elem);
+    consume(value);
   }
   pthread_exit(NULL);
 }
 
 int main() {
   pthread_t pro, con;
+  buffer_t buffer;
   srand(time(NULL));
+  buffer_init(&buffer);
   pthread_mutex_init(&mutex, NULL);
-  sem_init(&empty, 0, N);
+  sem_init(&empty, 0, BUFF_SIZE);
   sem_init(&full, 0, 0);
-  pthread_create(&pro, NULL, &producer, NULL);
-  pthread_create(&con, NULL, &consumer, NULL);
+  pthread_create(&pro, NULL, &producer, (void *) &buffer);
+  pthread_create(&con, NULL, &consumer, (void *) &buffer);
   pthread_join(pro, NULL);
   pthread_join(con, NULL);
   sem_destroy(&full);

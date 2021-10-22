@@ -1,1 +1,1 @@
-gcc main.c -o main -pthread
+gcc buffer.c main.c -o main -pthread
